@@ -1,8 +1,8 @@
-# Advanced Sample Hardhat Project
+# Smartcontracts on Hardhat Project
 
-This project demonstrates an advanced Hardhat use case, integrating other tools commonly used alongside Hardhat in the ecosystem.
+This project demonstrates testing of smartcontracts
 
-Try running some of the following tasks:
+Try running:
 
 ```shell
 npm install
