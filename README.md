@@ -5,6 +5,7 @@ This project demonstrates an advanced Hardhat use case, integrating other tools 
 Try running some of the following tasks:
 
 ```shell
+npm install
 npx hardhat accounts
 npx hardhat compile
 npx hardhat run --network localhost scripts/deploy.js 
