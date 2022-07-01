@@ -77,7 +77,7 @@ describe("MyNFT", function () {
             await mintnft.safeMint( addr1.address, overrides)
         }
 
-        await  expect( mintnft.safeMint( addr2.address, overrides)).to.be.revertedWith("Cant mint more");
+        await  expect( mintnft.safeMint( addr2.address, overrides)).to.be.revertedWith("Cant mint more.");
     });
 
 });

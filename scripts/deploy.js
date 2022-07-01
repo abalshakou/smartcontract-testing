@@ -28,6 +28,13 @@ async function main() {
   await mintnft.deployed();
 
   console.log("contract deployed to:", mintnft.address);
+
+  const MultiSigWallet = await hre.ethers.getContractFactory("MultiSigWallet");
+  const multiSigWallet = await MultiSigWallet.deploy(["0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"], 1);
+
+  await multiSigWallet.deployed();
+
+  console.log("contract deployed to:", multiSigWallet.address);
 }
 
 // We recommend this pattern to be able to use async/await everywhere
