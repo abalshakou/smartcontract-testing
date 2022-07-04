@@ -58,4 +58,37 @@ describe("MultiSigWallet", function () {
         const tx = await multiSigWallet.getTransactionCount();
         expect(tx).to.be.equal(1);
     })
+
+    it('Should return  bool on address - owner or not', async function () {
+        const tx = await multiSigWallet.isOwner(owner.address);
+        expect(tx).to.be.equal(true);
+    });
+
+    it('Should return  transaction count after submit transaction = 1', async function () {
+        const tx = await multiSigWallet.getTransactionCount();
+        expect(tx).to.be.equal(1);
+    });
+
+    it('Should return transaction by number and check all keys of struct array', async function () {
+        expect(await multiSigWallet.transactions("0")).to.have.any.keys("to", "data", "executed", "value", "numConfirmations");
+    })
+
+    it('Should check if  transaction include address of transaction', async function () {
+        expect(JSON.stringify(await multiSigWallet.transactions("0"))).to.be.include(addr1.address);
+    })
+
+    it('Should check if  transaction include address of transaction use getTransaction method', async function () {
+        //console.log(await multiSigWallet.getTransaction("0"))
+        expect(await multiSigWallet.getTransaction("0")).to.be.include(addr1.address);
+    })
+
+    it('Should confirm Transaction', async function () {
+        await multiSigWallet.confirmTransaction("0");
+        expect(JSON.stringify(await multiSigWallet.transactions("0"))).to.be.include("1");
+    })
+
+    it('Should execute Transaction', async function () {
+        await multiSigWallet.executeTransaction("0");
+        expect(JSON.stringify(await multiSigWallet.transactions("0"))).to.be.include('true');
+    })
 });
