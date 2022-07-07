@@ -21,13 +21,13 @@ async function main() {
 
   console.log("contract deployed to:", manager.address);
 
-
-  const MyNFT = await hre.ethers.getContractFactory("MyNFT");
-  const mintnft = await MyNFT.deploy();
-
-  await mintnft.deployed();
-
-  console.log("contract deployed to:", mintnft.address);
+  //
+  // const MyNFT = await hre.ethers.getContractFactory("MyNFT");
+  // const mintnft = await MyNFT.deploy();
+  //
+  // await mintnft.deployed();
+  //
+  // console.log("contract deployed to:", mintnft.address);
 
   const MultiSigWallet = await hre.ethers.getContractFactory("MultiSigWallet");
   const multiSigWallet = await MultiSigWallet.deploy(["0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"], 1);
@@ -35,6 +35,21 @@ async function main() {
   await multiSigWallet.deployed();
 
   console.log("contract deployed to:", multiSigWallet.address);
+
+  const ERC721 = await hre.ethers.getContractFactory("ERC721");
+  const erc721 = await ERC721.deploy();
+
+  await erc721.deployed();
+
+  console.log("contract erc721 deployed to:", erc721.address);
+
+
+  const EnglishAuction = await hre.ethers.getContractFactory("EnglishAuction");
+  const englishAuction = await EnglishAuction.deploy(erc721.address, 77, 1);
+
+  await englishAuction.deployed();
+
+  console.log("contract englishAuction deployed to:", englishAuction.address);
 }
 
 // We recommend this pattern to be able to use async/await everywhere
