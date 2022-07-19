@@ -11,6 +11,8 @@ describe("Governance", function () {
     let addr5;
     let addrs;
 
+    let   blockNumber, proposalState, pId, vote, deadline, snapshot
+
     const name = "Dapp testing DAO"
     const symbol = "DAOT"
     const supply = 1000; // 1000 Tokens
@@ -33,6 +35,12 @@ describe("Governance", function () {
         await token.transfer(addr3.address, amount, { from: owner.address })
         await token.transfer(addr4.address, amount, { from: owner.address })
         await token.transfer(addr5.address, amount, { from: owner.address })
+
+        await token.delegate(addr1.address, { from: owner.address })
+        await token.delegate(addr2.address, { from: owner.address })
+        await token.delegate(addr3.address, { from: owner.address })
+        await token.delegate(addr4.address, { from: owner.address })
+        await token.delegate(addr5.address, { from: owner.address })
 
         //  passing minDelay,  also need to pass 2 arrays
         // The 1st array  who  allowed to make a proposal.
@@ -95,16 +103,73 @@ describe("Governance", function () {
 
 
     it('Create proposal ', async function () {
+        //Here we get unsigned function
         const encodedFunction = await treasury.populateTransaction.releaseFunds();
-
         const description = "Release Funds from Treasury";
-        console.log(encodedFunction);
-        console.log(ethers.utils.hexlify(encodedFunction));
-        console.log(`${description}\n`);
-        const tx = await governance.propose([treasury.address], [0], [encodedFunction], description, { from: owner.address });
 
-        const id = tx.logs[0].args.proposalId;
-        console.log(`Created Proposal: ${id.toString()}\n`);
+        //here we encode function to hex using keccak 256
+
+        // console.log(ethers.utils.id(encodedFunction)); if need to encode like encodeABI web3
+
+        const tx = await governance.propose([treasury.address], [0], [ethers.utils.id(encodedFunction)], description, { from: owner.address });
+       // console.log(tx);
+
+        //here we return state of transaction because we need get proposal Id
+        const txWait = await tx.wait();
+
+         pId = txWait.events[0].args.proposalId.toString();
+
+       // console.log(pId);
+       // console.log(`Created Proposal: ${id.toString()}\n`);
     });
 
+    it('Check  state of proposal ', async function () {
+
+        proposalState = await governance.state(pId)
+        console.log(`Current state of proposal: ${proposalState.toString()} (Pending) \n`)
+
+        expect(await proposalState).to.equal(0);
+    });
+
+
+    it('Check  snapshot of proposal ', async function () {
+
+        snapshot = await governance.proposalSnapshot(pId)
+        console.log(`Proposal created on block ${snapshot.toString()}`)
+
+        expect(await snapshot.toString()).to.be.a('string');
+    });
+
+    it('Check  deadline of proposal ', async function () {
+
+        const deadline = await governance.proposalDeadline(pId)
+        console.log(`Proposal deadline on block ${deadline.toString()}\n`)
+
+        const snapNextBlock = snapshot.toNumber() + 5;
+        expect(await deadline.toString()).to.be.equal(snapNextBlock.toString());
+    });
+
+    it('Check  blockNumber of proposal ', async function () {
+        const provider = waffle.provider;
+        blockNumber = await provider.getBlockNumber()
+        console.log(`Current blocknumber: ${blockNumber}\n`)
+
+        expect(await blockNumber.toString()).to.be.equal(snapshot.toString());
+    });
+
+    it('Check  quorum votes equal 50', async function () {
+        const quorum = await governance.quorum(blockNumber - 1)
+        console.log(`Number of votes required to pass: ${ethers.utils.formatUnits(quorum.toString(), 'wei')}\n`)
+
+        expect(await ethers.utils.formatUnits(quorum.toString(), 'wei')).to.equal('50');
+    });
+
+    it('Casting votes', async function () {
+        // 0 = Against, 1 = For, 2 = Abstain
+        vote = await governance.castVote(pId, 1, { from: addr1.address })
+        vote = await governance.castVote(pId, 1, { from: addr2.address })
+        vote = await governance.castVote(pId, 1, { from: addr3.address })
+        vote = await governance.castVote(pId, 0, { from: addr4.address })
+        vote = await governance.castVote(pId, 2, { from: addr5.address })
+    });
 });
