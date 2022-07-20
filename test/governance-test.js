@@ -9,16 +9,18 @@ describe("Governance", function () {
     let addr3;
     let addr4;
     let addr5;
+    let executor;
     let addrs;
 
-    let   blockNumber, proposalState, pId, vote, deadline, snapshot
+    let   blockNumber, proposalState, pId, vote, deadline, snapshot, encodedFunction
 
     const name = "Dapp testing DAO"
     const symbol = "DAOT"
     const supply = 1000; // 1000 Tokens
+    const amount = 50;
 
     before(async function () {
-        [owner, addr1, addr2, addr3, addr4, addr5, ...addrs] = await ethers.getSigners();
+        [owner, addr1, addr2, addr3, addr4, addr5, executor, ...addrs] = await ethers.getSigners();
 
         Token = await hre.ethers.getContractFactory("Token");
         token = await Token.deploy(name, symbol, supply);
@@ -27,26 +29,14 @@ describe("Governance", function () {
 
         console.log("contract token deployed to:", token.address);
 
-        const amount = 50;
-        const minDelay = 1;
 
-        await token.transfer(addr1.address, amount, { from: owner.address })
-        await token.transfer(addr2.address, amount, { from: owner.address })
-        await token.transfer(addr3.address, amount, { from: owner.address })
-        await token.transfer(addr4.address, amount, { from: owner.address })
-        await token.transfer(addr5.address, amount, { from: owner.address })
-
-        await token.delegate(addr1.address, { from: owner.address })
-        await token.delegate(addr2.address, { from: owner.address })
-        await token.delegate(addr3.address, { from: owner.address })
-        await token.delegate(addr4.address, { from: owner.address })
-        await token.delegate(addr5.address, { from: owner.address })
+        const minDelay = 10;
 
         //  passing minDelay,  also need to pass 2 arrays
         // The 1st array  who  allowed to make a proposal.
         // The 2nd array who  allowed to make executions.
         Timelock = await hre.ethers.getContractFactory("TimeLock");
-        timelock = await Timelock.deploy(minDelay, [owner.address], [owner.address] );
+        timelock = await Timelock.deploy(minDelay, [owner.address], [executor.address] );
 
         await timelock.deployed();
 
@@ -75,10 +65,33 @@ describe("Governance", function () {
 
         const proposerRole = await timelock.PROPOSER_ROLE()
         const executorRole = await timelock.EXECUTOR_ROLE()
+        console.log("executorRole:", executorRole);
 
         await timelock.grantRole(proposerRole, governance.address, { from: owner.address })
-        await timelock.grantRole(executorRole, governance.address, { from: owner.address })
+        await timelock.grantRole(executorRole, governance.address)
     });
+
+    it("should transfer tokens into 5 addresses", async function() {
+
+        await token.transfer(addr1.address, amount)
+        await token.connect(addr1).delegate(addr1.address)
+        await token.transfer(addr2.address, amount)
+        await token.connect(addr2).delegate(addr2.address)
+        await token.transfer(addr3.address, amount)
+        await token.connect(addr3).delegate(addr3.address)
+        await token.transfer(addr4.address, amount)
+        await token.connect(addr4).delegate(addr4.address)
+        await token.transfer(addr5.address, amount)
+        await token.connect(addr5).delegate(addr5.address)
+        await token.transfer(executor.address, amount)
+        await token.connect(executor).delegate(executor.address)
+
+        expect(await token.balanceOf(addr1.address)).to.be.equal(amount)
+        expect(await token.balanceOf(addr2.address)).to.be.equal(amount)
+        expect(await token.balanceOf(addr3.address)).to.be.equal(amount)
+        expect(await token.balanceOf(addr4.address)).to.be.equal(amount)
+        expect(await token.balanceOf(addr5.address)).to.be.equal(amount)
+    })
 
     it('Check balanse of addr1', async function () {
         await token.balanceOf(addr1.address);
@@ -104,7 +117,7 @@ describe("Governance", function () {
 
     it('Create proposal ', async function () {
         //Here we get unsigned function
-        const encodedFunction = await treasury.populateTransaction.releaseFunds();
+         encodedFunction = await treasury.populateTransaction.releaseFunds();
         const description = "Release Funds from Treasury";
 
         //here we encode function to hex using keccak 256
@@ -166,10 +179,62 @@ describe("Governance", function () {
 
     it('Casting votes', async function () {
         // 0 = Against, 1 = For, 2 = Abstain
-        vote = await governance.castVote(pId, 1, { from: addr1.address })
-        vote = await governance.castVote(pId, 1, { from: addr2.address })
-        vote = await governance.castVote(pId, 1, { from: addr3.address })
-        vote = await governance.castVote(pId, 0, { from: addr4.address })
-        vote = await governance.castVote(pId, 2, { from: addr5.address })
+        vote = await governance.connect(addr1).castVote(pId, 1)
+        vote = await governance.connect(addr2).castVote(pId, 1)
+        vote = await governance.connect(addr3).castVote(pId, 1)
+        vote = await governance.connect(addr4).castVote(pId, 0)
+        vote = await governance.connect(addr5).castVote(pId, 2)
     });
+
+    it('Check сurrent state of proposal equal 1', async function () {
+        // States: Pending, Active, Canceled, Defeated, Succeeded, Queued, Expired, Executed
+        proposalState = await governance.state(pId)
+        console.log(`Current state of proposal: ${proposalState.toString()} (Active) \n`)
+
+        expect(proposalState.toString()).to.equal('1');
+    });
+
+    it('Check сurrent state of proposal votes', async function () {
+        // NOTE: Transfer serves no purposes, it's just used to fast foward one block after the voting period ends
+        await token.transfer(owner.address, amount, { from: owner.address })
+
+        const { againstVotes, forVotes, abstainVotes } = await governance.proposalVotes(pId)
+        console.log(`Votes For: ${ethers.utils.formatUnits(forVotes.toString(), 'wei')}`)
+        console.log(`Votes Against: ${ethers.utils.formatUnits(againstVotes.toString(), 'wei')}`)
+        console.log(`Votes Neutral: ${ethers.utils.formatUnits(abstainVotes.toString(), 'wei')}\n`)
+
+        expect(ethers.utils.formatUnits(forVotes.toString(), 'wei')).to.equal('150');
+        expect(ethers.utils.formatUnits(againstVotes.toString(), 'wei')).to.equal('50');
+        expect(ethers.utils.formatUnits(abstainVotes.toString(), 'wei')).to.equal('50');
+    });
+
+    it('Check сurrent blocknumber', async function () {
+        const provider = waffle.provider;
+        blockNumber = await provider.getBlockNumber()
+        console.log(`Current blocknumber: ${blockNumber}\n`)
+    });
+
+    it('Check сurrent state of proposal', async function () {
+        proposalState = await governance.state(pId)
+        console.log(`Current state of proposal: ${proposalState.toString()} (Succeeded) \n`)
+    });
+
+    it('Check сurrent state of proposal Queued', async function () {
+        // Queue
+        const hash = ethers.utils.id("Release Funds from Treasury")
+        await governance.queue([treasury.address], [0], [ethers.utils.id(encodedFunction)], hash, { from: executor.address })
+
+        proposalState = await governance.state(pId)
+        console.log(`Current state of proposal: ${proposalState.toString()} (Queued) \n`)
+    });
+
+    it('Check сurrent state of proposal Executed', async function () {
+        // Execute
+        const hash = ethers.utils.id("Release Funds from Treasury")
+        await governance.execute([treasury.address], [0], [ethers.utils.id(encodedFunction)], hash, { from: executor.address  })
+
+        proposalState = await governance.state(pId)
+        console.log(`Current state of proposal: ${proposalState.toString()} (Executed) \n`)
+    });
+
 });
