@@ -1,3 +1,4 @@
+const { constants, expectEvent, expectRevert } = require('@openzeppelin/test-helpers');
 const {expect} = require("chai");
 const {ethers} = require("hardhat");
 
@@ -9,7 +10,6 @@ describe("Governance", function () {
     let addr3;
     let addr4;
     let addr5;
-    let executor;
     let addrs;
 
     let   blockNumber, proposalState, pId, vote, deadline, snapshot, encodedFunction
@@ -20,7 +20,7 @@ describe("Governance", function () {
     const amount = 50;
 
     before(async function () {
-        [owner, addr1, addr2, addr3, addr4, addr5, executor, ...addrs] = await ethers.getSigners();
+        [owner, addr1, addr2, addr3, addr4, addr5, ...addrs] = await ethers.getSigners();
 
         Token = await hre.ethers.getContractFactory("Token");
         token = await Token.deploy(name, symbol, supply);
@@ -30,13 +30,13 @@ describe("Governance", function () {
         console.log("contract token deployed to:", token.address);
 
 
-        const minDelay = 10;
+        const minDelay = 0;
 
         //  passing minDelay,  also need to pass 2 arrays
         // The 1st array  who  allowed to make a proposal.
         // The 2nd array who  allowed to make executions.
         Timelock = await hre.ethers.getContractFactory("TimeLock");
-        timelock = await Timelock.deploy(minDelay, [owner.address], [executor.address] );
+        timelock = await Timelock.deploy(minDelay, [owner.address], [owner.address] );
 
         await timelock.deployed();
 
@@ -65,10 +65,18 @@ describe("Governance", function () {
 
         const proposerRole = await timelock.PROPOSER_ROLE()
         const executorRole = await timelock.EXECUTOR_ROLE()
-        console.log("executorRole:", executorRole);
 
         await timelock.grantRole(proposerRole, governance.address, { from: owner.address })
-        await timelock.grantRole(executorRole, governance.address)
+        const executorTx = await timelock.grantRole(executorRole, governance.address)
+        const resultTx = await executorTx.wait();
+        console.log(`Mined. Status: ${resultTx.status}`);
+
+        // Canceller role - admin user
+        const cancellerRoleTx = await timelock.grantRole(await timelock.CANCELLER_ROLE(), owner.address);
+        console.log(`Canceller Role Transaction: ${cancellerRoleTx.hash}`);
+        result = await cancellerRoleTx.wait();
+        console.log(`Mined. Status: ${result.status}`);
+
     });
 
     it("should transfer tokens into 5 addresses", async function() {
@@ -83,8 +91,6 @@ describe("Governance", function () {
         await token.connect(addr4).delegate(addr4.address)
         await token.transfer(addr5.address, amount)
         await token.connect(addr5).delegate(addr5.address)
-        await token.transfer(executor.address, amount)
-        await token.connect(executor).delegate(executor.address)
 
         expect(await token.balanceOf(addr1.address)).to.be.equal(amount)
         expect(await token.balanceOf(addr2.address)).to.be.equal(amount)
@@ -179,6 +185,7 @@ describe("Governance", function () {
 
     it('Casting votes', async function () {
         // 0 = Against, 1 = For, 2 = Abstain
+
         vote = await governance.connect(addr1).castVote(pId, 1)
         vote = await governance.connect(addr2).castVote(pId, 1)
         vote = await governance.connect(addr3).castVote(pId, 1)
@@ -222,7 +229,7 @@ describe("Governance", function () {
     it('Check сurrent state of proposal Queued', async function () {
         // Queue
         const hash = ethers.utils.id("Release Funds from Treasury")
-        await governance.queue([treasury.address], [0], [ethers.utils.id(encodedFunction)], hash, { from: executor.address })
+        await governance.queue([treasury.address], [0], [ethers.utils.id(encodedFunction)], hash, { from: owner.address })
 
         proposalState = await governance.state(pId)
         console.log(`Current state of proposal: ${proposalState.toString()} (Queued) \n`)
@@ -230,9 +237,40 @@ describe("Governance", function () {
 
     it('Check сurrent state of proposal Executed', async function () {
         // Execute
-        const hash = ethers.utils.id("Release Funds from Treasury")
-        await governance.execute([treasury.address], [0], [ethers.utils.id(encodedFunction)], hash, { from: executor.address  })
 
+
+        let nextTimestamp = Math.floor(Date.now() / 1000) + 9972800
+        const  ethereum = network.provider
+
+       await ethereum.send("evm_setNextBlockTimestamp", [nextTimestamp])
+       await ethereum.send("evm_mine", [])
+
+        const hash = ethers.utils.id("Release Funds from Treasury")
+
+        console.log(`Current state of proposal: ${treasury.address} () \n`)
+        console.log(`Current state of proposal: ${ethers.utils.id(encodedFunction)} () \n`)
+        console.log(`Current state of proposal: ${hash} () \n`)
+      //  console.log(`Current state of proposal: ${proposalState.toString()} (Executed) \n`)
+
+      const tx =  await governance.execute([treasury.address], [0], [ethers.utils.id(encodedFunction)], hash , { from: owner.address }  )
+       await tx.wait()
+        proposalState = await governance.state(pId)
+        console.log(`Current state of proposal: ${proposalState.toString()} (Executed) \n`)
+    });
+
+    it('Check сurrent state of proposal Cancel', async function () {
+        // Cancel
+
+        let nextTimestamp = Math.floor(Date.now() / 1000) + 99972800
+        const  ethereum = network.provider
+
+        await ethereum.send("evm_setNextBlockTimestamp", [nextTimestamp])
+        await ethereum.send("evm_mine", [])
+
+        const hash = ethers.utils.id("Release Funds from Treasury")
+
+        const tx =  await governance.cancel([treasury.address], [0], [ethers.utils.id(encodedFunction)], hash , { from: owner.address }  )
+        await tx.wait()
         proposalState = await governance.state(pId)
         console.log(`Current state of proposal: ${proposalState.toString()} (Executed) \n`)
     });

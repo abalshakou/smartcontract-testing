@@ -7,7 +7,7 @@ import "@openzeppelin/contracts/governance/extensions/GovernorVotes.sol";
 import "@openzeppelin/contracts/governance/extensions/GovernorVotesQuorumFraction.sol";
 import "@openzeppelin/contracts/governance/extensions/GovernorTimelockControl.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Votes.sol";
-
+import "hardhat/console.sol";
 
 // NOTE: Contract created with the help of --> https://wizard.openzeppelin.com/#governor
 
